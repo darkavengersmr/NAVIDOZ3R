@@ -1,0 +1,149 @@
+PTx[0] = 0
+PTy[0] = 0
+
+'GraphicsWindow.PenWidth = 8
+GraphicsWindow.PenColor = "Red"
+
+
+' Показываем графическое окно
+GraphicsWindow.Show()
+
+' Очистить окно
+GraphicsWindow.Clear()
+
+' Заголовок окна
+GraphicsWindow.Title = "NAVIDOZ3R"
+
+' запрещяем изменять размеры окна
+GraphicsWindow.CanResize = "False"
+
+' Размеры окна
+GraphicsWindow.Width=825
+GraphicsWindow.Height=640
+
+' Окно по центур экрана
+
+GraphicsWindow.Left = (Desktop.Width - GraphicsWindow.Width) / 2
+GraphicsWindow.Top = (Desktop.Height - GraphicsWindow.Height) / 2
+
+' Цвет фона
+GraphicsWindow.BackgroundColor = "Black"
+
+' GetRandomColor() - случайный цвет (маркер?)
+
+' Шрифт
+GraphicsWindow.FontName = "Arial"
+GraphicsWindow.FontSize = 20
+GraphicsWindow.PenColor = "Black"
+' По умолчанию шрифт - жирный
+' GraphicsWindow.FontBold = "False" 
+
+' фоновая картинка:
+background = ImageList.LoadImage(Program.Directory + "/map1.jpg")
+GraphicsWindow.DrawImage(background, 0, 0)
+
+' Разрешение карты в пикселах
+ImageX_pix = 480
+ImageY_piy = 480
+
+' Размеры поля в миллиметрах
+ImageX_mm = 1117
+ImageY_mm = 1116
+
+' Текст ан экране 
+' GraphicsWindow.DrawText(20,40, "Text")
+
+' Добавим кнопки
+btnPOI = Controls.AddButton("Сохранить маршрут", 20,GraphicsWindow.Height-100)
+btnStart = Controls.AddButton("Старт", 320,GraphicsWindow.Height-100)
+btngo = Controls.AddButton("Действительный маршрут", 520,GraphicsWindow.Height-100)
+
+' Событие кнопки
+Controls.ButtonClicked = OnClick
+
+' количество путевых точек
+POI = 0
+
+Sub OnClick
+  Sound.PlayClick()
+  btn=Controls.LastClickedButton
+  If btn="Button1" then
+    GraphicsWindow.ShowMessage("Маршрут записан в робота","EV3")
+    F = EV3File.OpenWrite("/home/root/lms2012/prjs/NAVIDOZ3R/NAVIDOZ3R_PT.txt")
+    EV3File.WriteLine(F,POI)
+    For i = 0 To POI-1
+      EV3File.WriteLine(F,Math.Round(PTx[i]))
+      EV3File.WriteLine(F,Math.Round(ImageY_mm - PTy[i]))
+    EndFor  
+    
+    EV3File.Close(F)
+    LCD.Clear()
+    F = EV3File.OpenRead("/home/root/lms2012/prjs/NAVIDOZ3R/NAVIDOZ3R_PT.txt")
+    tmp = EV3File.ReadLine(F)
+    LCD.Text(1,0,0,2,tmp)
+    For i = 0 To POI*2-1
+      tmp = EV3File.ReadLine(F)
+      LCD.Text(1,0,i*10+20,1,tmp)
+      Program.Delay(300)
+    EndFor
+    
+    EV3File.Close(F)
+    
+    ' запись маршрута в файл
+    ' вывод сообщения на экран
+  
+  ElseIf btn="Button3" Then
+    'LCD.Clear()
+    S = EV3File.OpenRead("/home/root/lms2012/prjs/NAVIDOZ3R/NAVIDOZ3R_REAL.txt")
+    tmp = EV3File.ReadLine(S)
+    GraphicsWindow.BrushColor = "Yellow"
+    For i = 0 To tmp-1
+      tm = EV3File.ReadLine(S)
+      m = EV3File.ReadLine(S)
+      GraphicsWindow.FillEllipse((tm/ImageX_mm*ImageX_pix)-2.5,ImageY_piy - (m/ImageY_mm*ImageY_piy)-2.5,5,5)
+      Program.Delay(10)
+    EndFor    
+    
+
+  Else
+    ' выход из программы
+    Program.End()
+  EndIf
+  
+EndSub
+
+' Отслеживание событий нажатия кнопки мыши
+GraphicsWindow.MouseDown = OnMouseDown
+
+Sub OnMouseDown
+  Sound.PlayClick()
+  If POI = 0 Then
+    GraphicsWindow.BrushColor = "Blue"
+  Else  
+    GraphicsWindow.BrushColor = "Red"
+  EndIf
+  GraphicsWindow.FillEllipse(x-5,y-5,10,10)
+  Program.Delay(500)
+  
+  PTx[POI] = x*ImageX_mm/ImageX_pix
+  PTy[POI] = y*ImageY_mm/ImageY_piy
+  
+  If POI >= 1 Then
+     GraphicsWindow.DrawLine(PTx[POI-1]/ImageX_mm*ImageX_pix, PTy[POI-1]/ImageY_mm*ImageY_piy, PTx[POI]/ImageX_mm*ImageX_pix, PTy[POI]/ImageY_mm*ImageY_piy)
+  EndIf
+  
+  
+  POI = POI + 1
+  
+ 
+  
+EndSub
+
+While "True"
+  x = GraphicsWindow.MouseX
+  y = GraphicsWindow.MouseY
+EndWhile
+
+' Толщина линий определяется свойством PenWidth, а её цвет –свойством PenColor того же класса GraphicsWindow.
+' GraphicsWindow.DrawLine(x1, y1, x2, y2)
+'GraphicsWindow.FillEllipse(x, y, width, height)

@@ -1,0 +1,448 @@
+Program.Delay(2000)
+Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/load")
+Speaker.Wait()
+Program.Delay(1000)
+
+
+' Предварительная попытка устранения дрифта
+Sensor.SetMode(2,0)
+
+Sensor.SetMode(3,0)
+Sensor.SetMode(3,1)
+Sensor.SetMode(3,0)
+Sensor.SetMode(3,1)
+Sensor.SetMode(3,0) 
+
+
+Time = EV3.Time
+' Взятие дрифта за 5 секунд
+Gyro1 = Sensor.ReadRawValue(3,0)
+Program.Delay(5000)
+Gyro2 = Sensor.ReadRawValue(3,0)
+Drift10 = (Gyro1 - Gyro2) / 500
+
+
+S = EV3File.OpenWrite("/home/root/lms2012/prjs/NAVIDOZ3R/NAVIDOZ3R_REAL.txt")
+F = EV3File.OpenRead("/home/root/lms2012/prjs/NAVIDOZ3R/NAVIDOZ3R_PT.txt")
+Line = EV3File.ConvertToNumber(EV3File.ReadLine(F))
+PT = Line
+
+
+
+LCD.Clear()
+LCD.Text(1,0,0,2,Line)
+
+Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/plan")
+
+For i = 0 To PT-1
+  Line = EV3File.ConvertToNumber(EV3File.ReadLine(F))
+  PTx[i] = Line
+  LCD.Text(1,0,i*10+20,1,Line)
+  
+  Program.Delay(50)
+  
+  Line = EV3File.ConvertToNumber(EV3File.ReadLine(F))
+  PTy[i] = Line
+  LCD.Text(1,40,i*10+20,1,Line)
+  
+  Program.Delay(50)
+EndFor 
+EV3File.Close(F)
+
+Program.Delay(3000)
+
+PTR = 0
+PTRx[0] = 0
+PTRy[0] = 0
+
+
+' Обявление переменных
+u = 0
+e = 0            
+e_old = 0
+Pk = 4
+Dk = 8
+
+X = 0
+Y = 0
+X_old = 0
+Y_old = 0
+X_new = 0
+Y_new = 0
+X_tmp = 0
+Y_tmp = 0
+
+speed = 25
+diam = 32.75125
+Dist = 0
+Azimut = 0
+Azimut_old = 0
+Gyro = 0
+Finish = "False"
+TimeTurn = 0
+
+' Подпоцес передаёт показания гироскопа с устанением дрифта
+Sub Gyro
+  While"True"
+    ' Устранение дрифта путем его вычитания из показаний датчика
+    'Gyro = -1*(Math.Remainder(Sensor.ReadRawValue(3,0) - Drift10 * (Time/10) + 540, 360) - 180)
+    Gyro = -1*(Sensor.ReadRawValue(3,0) - Drift10 * (Time/10))
+  EndWhile
+EndSub
+
+Sub Display
+  
+  Speaker.Note(100,"C5",500)
+  
+  LCD.Clear()
+  
+  LCD.Text(1,0,0,2,X)
+  LCD.Text(1,0,20,2,Y)
+  
+  LCD.Text(1,0,40,1,X_old)
+  LCD.Text(1,0,50,1,Y_old)
+  
+  LCD.Text(1,0,70,2,Azimut)
+  LCD.Text(1,0,90,1,Gyro)
+  
+  Program.Delay(3000)
+  
+EndSub
+
+
+
+
+
+'  Фукцыя для движения вперёд по градусам с удерживанием направления
+Sub Go_Forward
+  Motor.ResetCount("BC")
+  Finish = "True"
+  While Math.Abs((Motor.GetCount("B")+Motor.GetCount("C"))/2) < Dist/(diam*Math.Pi)*360
+    e = Azimut-(-1)*Gyro
+    
+    u=Pk*e+Dk*(e-e_old)
+    
+    Motor.Start("B",-1*speed+u)
+    Motor.Start("C",-1*speed-u)
+    
+    e_old = e
+    
+    AzimutTMP = Math.Remainder(Azimut+3600,360)
+    
+    if AzimutTMP < 90 Then
+      X_tmp = Math.Abs(Motor.GetCount("B")+Motor.GetCount("C"))/2*(diam*Math.Pi/360)*Math.Sin(Math.GetRadians(Math.Remainder(AzimutTMP+3600,90)))
+      Y_tmp = Math.Abs(Motor.GetCount("B")+Motor.GetCount("C"))/2*(diam*Math.Pi/360)*Math.Cos(Math.GetRadians(Math.Remainder(AzimutTMP+3600,90)))
+      
+      X = X_old+X_tmp
+      Y = Y_old+Y_tmp
+    ElseIf 90 <= AzimutTMP and AzimutTMP < 180 Then
+      X_tmp = Math.Abs(Motor.GetCount("B")+Motor.GetCount("C"))/2*(diam*Math.Pi/360)*Math.Cos(Math.GetRadians(Math.Remainder(AzimutTMP+3600,90)))
+      Y_tmp = Math.Abs(Motor.GetCount("B")+Motor.GetCount("C"))/2*(diam*Math.Pi/360)*Math.Sin(Math.GetRadians(Math.Remainder(AzimutTMP+3600,90))) 
+      
+      X = X_old+X_tmp
+      Y = Y_old-Y_tmp
+    ElseIf 180 <= AzimutTMP and AzimutTMP < 270 Then
+      X_tmp = Math.Abs(Motor.GetCount("B")+Motor.GetCount("C"))/2*(diam*Math.Pi/360)*Math.Sin(Math.GetRadians(Math.Remainder(AzimutTMP+3600,90)))
+      Y_tmp = Math.Abs(Motor.GetCount("B")+Motor.GetCount("C"))/2*(diam*Math.Pi/360)*Math.Cos(Math.GetRadians(Math.Remainder(AzimutTMP+3600,90)))
+      
+      X = X_old-X_tmp
+      Y = Y_old-Y_tmp
+    ElseIf 270 <= AzimutTMP and AzimutTMP < 360 Then
+      X_tmp = Math.Abs(Motor.GetCount("B")+Motor.GetCount("C"))/2*(diam*Math.Pi/360)*Math.Cos(Math.GetRadians(Math.Remainder(AzimutTMP+3600,90)))
+      Y_tmp = Math.Abs(Motor.GetCount("B")+Motor.GetCount("C"))/2*(diam*Math.Pi/360)*Math.Sin(Math.GetRadians(Math.Remainder(AzimutTMP+3600,90))) 
+      
+      X = X_old-X_tmp
+      Y = Y_old+Y_tmp
+    EndIf 
+    
+    If Sensor.ReadPercent(2)<62 Then
+      Finish = "False"
+      Motor.Stop("BC","True")
+      Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/break")
+      Speaker.Wait()
+      Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/objezd")
+      Speaker.Wait()
+      
+      Display()
+      'Program.Delay(8000)
+      
+      X_old = X
+      Y_old = Y
+      
+      Detour3()
+      
+      X_old = X
+      Y_old = Y
+      
+      Display()
+      'Program.Delay(8000)
+      
+      GotoXY()
+      
+    EndIf  
+    
+    PTRx[PTR] = X 
+    PTRy[PTR] = Y
+    
+    PTR = PTR+1
+    
+    Program.Delay(10)
+  EndWhile
+  Motor.Stop("BC","True")
+  Program.Delay(100)
+EndSub
+
+
+
+Sub Detour1
+  'R = Sensor.ReadPercent(2)
+  
+  Azimut_old = Azimut
+  Azimut = Azimut+45
+  MinimumTurn()
+  Turn()
+  
+  Dist = Math.SquareRoot(22*22+22*22)*10
+  Go_Forward()  
+  
+  Display()
+  'Program.Delay(8000)
+  
+  X_old = X
+  Y_old = Y
+  
+  Azimut_old = Azimut
+  Azimut = Azimut-90
+  MinimumTurn()
+  Turn()
+  
+  Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/vozvrat")
+  Speaker.Wait()
+  
+  Dist = Math.SquareRoot(22*22+22*22)*10
+  Go_Forward()
+  Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/continue")
+  Speaker.Wait()
+EndSub
+
+Sub Detour2
+  'R = Sensor.ReadPercent(2)
+  
+  Azimut_old = Azimut
+  Azimut = Azimut-90
+  MinimumTurn()
+  Turn()
+  
+  Dist = 180
+  Go_Forward()  
+  
+  Display()
+  'Program.Delay(8000)
+  
+  X_old = X
+  Y_old = Y
+  
+  Azimut_old = Azimut
+  Azimut = Azimut+90
+  MinimumTurn()
+  Turn()
+  
+  Dist = 360
+  Go_Forward()
+  
+  Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/vozvrat")
+  Speaker.Wait()
+  
+  X_old = X
+  Y_old = Y
+  
+  Azimut_old = Azimut
+  Azimut = Azimut+90
+  MinimumTurn()
+  Turn()
+  
+  Dist = 180
+  Go_Forward()
+  
+  
+  Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/continue")
+  Speaker.Wait()
+EndSub
+
+Sub Detour3
+  
+  For h=1 To 6
+    
+    'Display()
+    'Program.Delay(8000)
+    
+    X_old = X
+    Y_old = Y
+    
+    Azimut_old = Azimut
+    If h = 1 Then
+      Azimut = Azimut-75
+    Else
+      Azimut = Azimut+30  
+    EndIf  
+    MinimumTurn()
+    Turn()
+    
+    Dist = 103.52*0.9
+    Go_Forward()
+    
+    If h=5 Then
+      Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/vozvrat")
+      Speaker.Wait()  
+    EndIf
+  EndFor
+  
+  Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/continue")
+  Speaker.Wait()
+EndSub
+
+
+
+
+
+Sub MinimumTurn
+  For j=-10 To 10
+    If Math.Abs(Azimut+j*360-Azimut_old)<180 Then
+      Azimut = Azimut+j*360
+    EndIf
+  EndFor
+EndSub
+
+Sub Turn
+  TimeTurn = EV3.Time
+  While Math.Abs(Azimut-(-1)*Gyro)>=3 And EV3.Time-TimeTurn<5000
+    e = Azimut-(-1)*Gyro
+    
+    u=Pk*e+Dk*(e-e_old)
+    
+    Motor.Start("B",u)
+    Motor.Start("C",-1*u)
+    
+    e_old = e
+    Program.Delay(10)  
+  EndWhile
+  Motor.Stop("BC","True")
+  Program.Delay(100)
+EndSub
+
+
+
+
+
+
+Sub GotoXY
+  Azimut_old = Azimut
+  
+  If X_old <> X_new And Y_old <> Y_new Then
+    
+    If X_old>X_new And Y_old>Y_new Or X_old<X_new And Y_old<Y_new Then
+      Azimut = Math.GetDegrees(Math.ArcTan(Math.Abs(X_old-X_new)/Math.Abs(Y_old-Y_new)))
+    Else
+      Azimut = Math.GetDegrees(Math.ArcTan(Math.Abs(Y_old-Y_new)/Math.Abs(X_old-X_new)))  
+    EndIf  
+    
+    If X_old>X_new And Y_old>Y_new Then
+      Azimut = Azimut+180
+    ElseIf X_old<X_new And Y_old>Y_new Then
+      Azimut = Azimut+90
+    ElseIf X_old>X_new And Y_old<Y_new Then
+      Azimut = Azimut+270
+    EndIf
+  Else
+    If X_old = X_new And Y_old < Y_new Then
+      Azimut = 0
+    ElseIf X_old = X_new And Y_old > Y_new Then
+      Azimut = 180
+    ElseIf X_old < X_new And Y_old = Y_new Then
+      Azimut = 90
+    ElseIf X_old > X_new And Y_old = Y_new Then
+      Azimut = -90
+    EndIf
+  EndIf
+  
+  'Azimut = Math.Remainder(Azimut + 540, 360) - 180
+  
+  MinimumTurn()
+  Turn()
+  
+  
+  Dist = Math.SquareRoot((X_old-X_new)*(X_old-X_new) + (Y_old-Y_new)*(Y_old-Y_new))
+  Go_Forward()
+  
+EndSub
+
+
+
+
+' Запуск задачи Gyro
+Thread.Run = Gyro
+
+' Далее идёт оснавная программа в которой 
+' изпользуются выше написаные блоки
+
+' Перед запуском блока следует передать ему значения
+' через соответствующие переменные
+
+For i = 1 To PT-1
+  X_old = PTx[i-1]
+  Y_old = PTy[i-1]
+  X_new = PTx[i]
+  Y_new = PTy[i]
+  
+  GotoXY()
+  
+  If Finish = "False" Then
+    X_old = X
+    Y_old = Y
+    X_new = PTx[0]
+    Y_new = PTy[0]
+    Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/back_to_start")
+    GotoXY()
+    i = 1000
+    'Program.End()
+  Else
+    If i<>PT-1 Then
+      Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/poi")
+      Speaker.Wait()
+      
+      
+    EndIf
+  EndIf
+  
+  
+EndFor
+
+Azimut_old = Azimut
+Azimut = 0
+
+MinimumTurn()
+Turn()
+
+Speaker.Play(100,"/home/root/lms2012/prjs/NAVIDOZ3R/poi_finish")
+Speaker.Wait()
+
+
+EV3File.WriteLine(S,PTR)
+For qwe = 0 To PTR-1
+  EV3File.WriteLine(S,Math.Round(PTRx[qwe]))
+  EV3File.WriteLine(S,Math.Round(PTRy[qwe]))
+EndFor
+EV3File.Close(S)
+
+LCD.Clear()
+LCD.Text(1,0,0,2,Drift10 * (Time/10))
+
+Gyro1 = Sensor.ReadRawValue(3,0)
+Program.Delay(5000)
+Gyro2 = Sensor.ReadRawValue(3,0)
+Drift10 = (Gyro1 - Gyro2) / 5
+
+LCD.Text(1,0,20,2,Drift10  * (Time/10))
+Speaker.Note(100,"C4",1000)
+
+Program.Delay(10000)
